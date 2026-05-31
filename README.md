@@ -11,7 +11,7 @@ Bot is a Java 21, Gradle-based Fabric Minecraft mod focused on client-side bot a
 ## Requirements
 
 - **Java 21**
-- **Minecraft/Fabric versions** defined in `gradle.properties` (for example `minecraft_version`, loader/API-related properties)
+- **Minecraft/Fabric versions** defined in `gradle.properties` (for example, `minecraft_version`, loader/API-related properties)
 - A **Fabric-compatible development setup** (IDE + Gradle + Fabric Loom workflow)
 
 ## Setup
@@ -26,7 +26,7 @@ Bot is a Java 21, Gradle-based Fabric Minecraft mod focused on client-side bot a
 ./gradlew build
 ```
 
-```bat
+```cmd
 gradlew.bat build
 ```
 
@@ -36,7 +36,7 @@ gradlew.bat build
 ./gradlew runClient
 ```
 
-```bat
+```cmd
 gradlew.bat runClient
 ```
 

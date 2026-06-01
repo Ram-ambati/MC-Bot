@@ -54,7 +54,7 @@ public class BotClient implements ClientModInitializer {
 		// Register a tick listener to update movement each client tick.
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			try {
-				movementController.tick(client);
+				movementController.tick();
 			} catch (Throwable t) {
 				// Prevent exceptions from crashing the client tick loop.
 				LOGGER.error("Unhandled error in client tick", t);

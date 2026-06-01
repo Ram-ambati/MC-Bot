@@ -60,15 +60,17 @@ public class TrajectoryRenderer {
         }
 
         VertexConsumer consumer = context.consumers().getBuffer(RenderLayers.lines());
-        Vec3d cameraPos = client.getCameraEntity() != null
-                ? new Vec3d(
-                        client.getCameraEntity().getX(),
-                        client.getCameraEntity().getY(),
-                        client.getCameraEntity().getZ()
-                )
-                : client.player.getCameraPosVec(1.0F);
+        Vec3d cameraPos = context.worldState().cameraRenderState.pos;
 
-        // Keep the path on the ground plane so it reads as "path on blocks".
+        /*
+         * Rendering is the only place where camera position should be used.
+         * Fabric's world render consumers expect coordinates relative to the
+         * active camera, so the overlay subtracts cameraPos for drawing.
+         *
+         * The trajectory itself still starts at MinecraftClient#player, not the
+         * camera entity. This keeps the visual path anchored to the actual
+         * player while Freecam is active.
+         */
         double startWorldX = client.player.getX();
         double startWorldY = client.player.getY() + 0.05D;
         double startWorldZ = client.player.getZ();

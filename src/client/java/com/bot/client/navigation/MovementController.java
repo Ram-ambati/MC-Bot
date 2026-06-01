@@ -1,27 +1,30 @@
 package com.bot.client.navigation;
 
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.Vec3d;
 
 /**
  * Very small Stage 1 movement controller.
  * - Accepts a target position (x,y,z).
- * - Each client tick it rotates the player to face the target and simulates forward key input.
+ * - Each client tick it moves the actual player entity toward the target using a direction vector.
  * - Stops when within a small distance of the target.
  *
  * Notes / limitations:
  * - This stage purposefully ignores obstacles or terrain; it simply walks in a straight line toward the goal.
- * - It uses the game's forward KeyBinding to simulate movement; this may interact with normal player input.
+ * - It does not use camera entities, player rotation, or keybindings, which keeps it compatible with Freecam mods.
  */
 public class MovementController {
+    private static final double STOP_DISTANCE = 1.0D;
+    private static final double WALK_SPEED = 0.215D;
+    private static final double SLOWDOWN_DISTANCE = 2.0D;
+
     private double targetX;
     private double targetY;
     private double targetZ;
     private boolean active = false;
-    private static final double STOP_DISTANCE = 1.0D;
+    private boolean appliedMovement = false;
 
     public void setTarget(double x, double y, double z) {
         this.targetX = x;
@@ -32,6 +35,7 @@ public class MovementController {
 
     public void clearTarget() {
         this.active = false;
+        stopControlledMovement();
     }
 
     public boolean isActive() {
@@ -42,11 +46,21 @@ public class MovementController {
         return active ? new Vec3d(targetX, targetY, targetZ) : null;
     }
 
-    public void tick(MinecraftClient client) {
+    public void tick() {
         if (!active) return;
-        if (client.player == null) return;
 
-        PlayerEntity player = client.player;
+        /*
+         * Freecam compatibility:
+         * Always resolve and control the real client player entity here.
+         * Do not use MinecraftClient#getCameraEntity(), camera rotation, or
+         * keybinding state for navigation. Freecam mods often redirect those
+         * concepts to a detached camera, which would make the bot move the
+         * camera instead of the actual player.
+         */
+        MinecraftClient client = MinecraftClient.getInstance();
+        ClientPlayerEntity player = client.player;
+        if (player == null) return;
+
         double px = player.getX();
         double py = player.getY();
         double pz = player.getZ();
@@ -55,14 +69,8 @@ public class MovementController {
         double dz = targetZ - pz;
         double distSq = dx * dx + dy * dy + dz * dz;
         if (distSq <= STOP_DISTANCE * STOP_DISTANCE) {
-            // arrived
             active = false;
-            // release forward key if we set it
-            try {
-                KeyBinding forward = client.options.forwardKey;
-                forward.setPressed(false);
-            } catch (Throwable ignored) {
-            }
+            stopControlledMovement(player);
 
             if (client.inGameHud != null) {
                 client.inGameHud.getChatHud().addMessage(Text.literal("Arrived at target."));
@@ -70,26 +78,46 @@ public class MovementController {
             return;
         }
 
-        // Compute yaw and pitch to face the target (immediate snap)
-        double horizontal = Math.sqrt(dx * dx + dz * dz);
-        float yaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0D);
-        float pitch = (float) (-Math.toDegrees(Math.atan2(dy, horizontal)));
+        movePlayerTowardTarget(player, dx, dz, Math.sqrt(distSq));
+    }
 
-        // Apply rotation directly to the player (client-only). This will visually rotate the view.
-        // Use setter methods instead of direct field access.
-        try {
-            player.setYaw(yaw);
-            player.setPitch(pitch);
-        } catch (Throwable ignored) {
-            // Fallback: if setters are not available on this mapping set, ignore rotation.
+    private void movePlayerTowardTarget(ClientPlayerEntity player, double dx, double dz, double distance) {
+        double horizontalDistance = Math.sqrt(dx * dx + dz * dz);
+        if (horizontalDistance <= 0.0001D) {
+            stopControlledMovement(player);
+            return;
         }
 
-        // Simulate forward key being pressed so the player moves ahead.
-        try {
-            KeyBinding forward = client.options.forwardKey;
-            forward.setPressed(true);
-        } catch (Throwable ignored) {
+        /*
+         * Movement is intentionally derived from the target delta, not from the
+         * player's yaw/pitch. Rotating the player would also rotate the attached
+         * camera in normal play and can fight Freecam/debug cameras. Applying a
+         * horizontal velocity vector lets navigation continue while the camera
+         * remains free for observation.
+         */
+        Vec3d velocity = player.getVelocity();
+        double speed = WALK_SPEED * Math.min(1.0D, distance / SLOWDOWN_DISTANCE);
+        double velocityX = dx / horizontalDistance * speed;
+        double velocityZ = dz / horizontalDistance * speed;
+
+        player.setVelocity(velocityX, velocity.y, velocityZ);
+        appliedMovement = true;
+    }
+
+    private void stopControlledMovement() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.player != null) {
+            stopControlledMovement(client.player);
         }
     }
-}
 
+    private void stopControlledMovement(ClientPlayerEntity player) {
+        if (!appliedMovement) {
+            return;
+        }
+
+        Vec3d velocity = player.getVelocity();
+        player.setVelocity(0.0D, velocity.y, 0.0D);
+        appliedMovement = false;
+    }
+}
